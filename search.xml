@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>Spring Boot | 理解自动装配</title>
+    <url>/2021/01/10/SpringBoot-%E7%90%86%E8%A7%A3%E8%87%AA%E5%8A%A8%E8%A3%85%E9%85%8D/</url>
+    <content><![CDATA[<blockquote>
+<p>Auto-configuration tries to be as intelligent as possible and will back-away as you define more of your own configuration. You can always manually <code>exclude()</code> any configuration that you never want to apply (use <code>excludeName()</code> if you don’t have access to them). You can also exclude them via the <code>spring.autoconfigure.exclude</code> property. Auto-configuration is always applied after user-defined beans have been registered.</p>
+<p>– 摘自<code>org.springframework.boot.autoconfigure.EnableAutoConfiguration</code></p>
+</blockquote>
+<h2 id="为什么要自动装配"><a href="#为什么要自动装配" class="headerlink" title="为什么要自动装配"></a>为什么要自动装配</h2><p>自动装配，首先理解为<code>Bean</code>的一种加载方式，其主要区别于<code>Spring Framework</code>时的配置文件装配或手动<code>@Import</code>以及<code>@ComponentScan</code>，例如通过<code>XML</code>文件加载定义的<code>Bean</code>。所有的一切都要从Spring的<code>IoC</code>说起。</p>
+<a id="more"></a>
+<blockquote>
+<p>The interface <code>org.springframework.context.ApplicationContext</code> represents the Spring IoC<br>container and is responsible for instantiating, configuring, and assembling the aforementioned beans.</p>
+<p>– 摘自《Spring Framework Reference》-7.2 Container overview</p>
+</blockquote>
+<p><code>IoC</code>是Spring框架的核心之一，基于此我们的对象的整个生命周期都由<code>IoC</code>容器来进行控制，而这一切的基础便由<code>org.springframework.context.ApplicationContext</code>这一接口提供，该接口对于Bean的操作能力主要由<code>org.springframework.beans.factory.BeanFactory</code>提供。</p>
+<p>在<code>Spring Framework</code>的年代，我们通过<code>XML</code>文件来配置和加载我们的Bean，对应的实现类便是<code>org.springframework.context.support.ClassPathXmlApplicationContext</code>，而基于代码的配置类也能加载我们的Bean，对应的实现类便是<code>org.springframework.context.annotation.AnnotationConfigApplicationContext</code>，具体实现原理不是本次讨论的重点，不在这里深究。重点在于，我们需要在<code>XML</code>文件中写大量的配置信息或在代码中进行手动装配，而为了省去这些配置信息我们就需要进行自动装配。</p>
+<h2 id="理解自动装配"><a href="#理解自动装配" class="headerlink" title="理解自动装配"></a>理解自动装配</h2><h3 id="入口"><a href="#入口" class="headerlink" title="入口"></a>入口</h3><p>通常情况下，我们通过<code>@SpringBootApplication</code>注解来启动应用，但是跟自动装配有关的，应该从<code>@EnableAutoConfiguration</code>注解说起，这主要是因为<code>@SpringBootApplication</code>注解被<code>@EnableAutoConfiguration</code>所标注，它决定了程序是具备支持自动装配的能力。</p>
+<p><code>@EnableAutoConfiguration</code>注解通过<code>@Import</code>导入了<code>org.springframework.boot.autoconfigure.AutoConfigurationImportSelector</code>类，该类实现了<code>org.springframework.context.annotation.ImportSelector</code>接口，其作用就是发现需要自动装配的类，并将其加载进来。</p>
+<blockquote>
+<p><code>@Import</code>注解通常与<code>ImportSelector</code>实现类结合使用，但是它也能导入<code>@Configuration</code>类，也可以同<code>ImportBeanDefinitionRegistrar</code>实现类一起使用。该机制可以作为基于Spring Boot的扩展来进行使用，比如我们常用的一些Starter扩展。</p>
+</blockquote>
+<h3 id="加载机制"><a href="#加载机制" class="headerlink" title="加载机制"></a>加载机制</h3><p>通过探究自动装配的入口，我们知道了它使用的是<code>@Import</code>+<code>ImportSelector</code>的方式导入我们需要的类，那么具体是如何发现这些类的呢？我们将从源码中一探究竟。</p>
+<p>实现<code>ImportSelector</code>接口的类，都会实现其<code>selectImports</code>方法，该方法会返回字符串数组，用于告知上下文具体加载那些Bean。<code>AutoConfigurationImportSelector</code>实现了<code>org.springframework.context.annotation.DeferredImportSelector</code>，支持在所有<code>@Configuration</code>类处理完成后进行操作。</p>
+<p>在<code>selectImports</code>方法中，通过<code>org.springframework.core.io.support.SpringFactoriesLoader#loadFactoryNames</code>方法将定义的类加载进来，即工厂加载机制。在<code>SpringFactoriesLoader</code>中定义了自动装配资源路径为<code>META-INF/spring.factories</code>，执行过程中会在程序的<code>CLASSPATH</code>下寻找所有<code>JAR</code>包<code>META-INF</code>目录下的<code>spring.factories</code>文件，该文件为<code>Properties</code>格式的文件，<strong>key值为接口或抽象类的全类名</strong>，<strong>value值为接口或抽象类的实现类，多个使用逗号分隔</strong>。</p>
+<p>以下截取自<code>org.springframework.boot:spring-boot-autoconfigure:2.1.4.RELEASE</code>依赖<code>META-INF/spring.factories</code>：</p>
+<figure class="highlight properties"><table><tr><td class="code"><pre><span class="line"><span class="comment"># Auto Configure</span></span><br><span class="line"><span class="meta">org.springframework.boot.autoconfigure.EnableAutoConfiguration</span>=<span class="string">\</span></span><br><span class="line">org.springframework.boot.autoconfigure.solr.SolrAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.transaction.jta.JtaAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.client.RestTemplateAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.embedded.EmbeddedWebServerFactoryCustomizerAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.reactive.HttpHandlerAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.reactive.ReactiveWebServerFactoryAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.reactive.WebFluxAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.reactive.error.ErrorWebFluxAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.reactive.function.client.ClientHttpConnectorAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.reactive.function.client.WebClientAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.servlet.HttpEncodingAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.servlet.MultipartAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.websocket.reactive.WebSocketReactiveAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.websocket.servlet.WebSocketServletAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.websocket.servlet.WebSocketMessagingAutoConfiguration,\</span><br><span class="line">org.springframework.boot.autoconfigure.webservices.WebServicesAutoConfiguration,\</span><br><span class="line"><span class="attr">org.springframework.boot.autoconfigure.webservices.client.WebServiceTemplateAutoConfiguration</span></span><br></pre></td></tr></table></figure>
+<p>这种机制就是常见的SPI机制，比如Dubbo中就用到了这个扩展机制，感兴趣的同学可以仔细研究以下SPI扩展的原理。</p>
+<h3 id="装配时机"><a href="#装配时机" class="headerlink" title="装配时机"></a>装配时机</h3><p>根据上文的探究，要深入了解自动装配的运行机制，就要知道被发现的类，是何时以何种方式加载到应用上下文的，也就是说要了解<code>@Import</code>+<code>ImportSelector</code>的具体机制。</p>
+<p>Spring Boot程序的执行，以<code>org.springframework.boot.SpringApplication#run(java.lang.String...)</code>为入口，概况来说主要有三大阶段：准备阶段、启动阶段和后置处理阶段，自动装配的时机便是在启动阶段完成的。</p>
+<p>启动阶段由<code>AbstractApplicationContext</code>的<code>refresh</code>方法带入，通过跟踪源码可知，<code>org.springframework.context.annotation.ConfigurationClassParser#processImports</code>负责处理了通过<code>@Import</code>+<code>ImportSelector</code>导入的类。具体链路我们在后续章节进行深入研究。</p>
+<h3 id="条件装配"><a href="#条件装配" class="headerlink" title="条件装配"></a>条件装配</h3><p>如引言所提到的，Spring Boot所提供的自动装配，优先使用自定义配置，而自动装配则提供一种默认行为，这种能力由<code>@Conditional</code>提供。</p>
+<p>诸如<code>@ConditionalOnMissingBean</code>、<code>@ConditionalOnProperty</code>、<code>@ConditionalOnWebApplication</code>等简化版条件注解，都是由<code>@Conditional</code>派生而来。例如，<code>@ConditionalOnMissingBean</code>被<code>@Conditional(OnBeanCondition.class)</code>标注，Bean注册与否由<code>org.springframework.boot.autoconfigure.condition.OnBeanCondition</code>决定。感兴趣的同学，可以在<code>org.springframework.boot.autoconfigure.condition</code>包下查看所有支持的条件装配注解，这里暂不对细节进行深入探究。</p>
+<h3 id="自动装配与Component扫描对比"><a href="#自动装配与Component扫描对比" class="headerlink" title="自动装配与Component扫描对比"></a>自动装配与<code>Component</code>扫描对比</h3><p>通常情况下，如果我们通过多模块加载各个依赖工程，在保证<strong>包名一致</strong>的情况下，Spring Boot程序可以自动识别这些类并加载它们的。那么，自动装配和<code>Component</code>扫描有什么区别呢？</p>
+<p>首先，两者直接或间接地通过<code>@Component</code>进行加载（<code>@Configuration</code>衍生自<code>@Component</code>），但是其注册到上下文的机制有所不同。</p>
+<p>基于<code>@SpringBootApplication</code>注解的程序，同时也被<code>@ComponentScan</code>标注，而在不声明<code>basePackages</code>和<code>basePackageClasses</code>的情况下，Spring Boot默认扫描的包是标注<code>@SpringBootApplication</code>注解的根目录，这也是为什么建议将启动类放在最外层的原因。而自动装配保证了在包名不一致的情况下，当前程序依然可以加载我们想让程序加载的类。</p>
+<p>两者的注册顺序不同，程序启动时会先注册<code>@ComponentScan</code>标注的类，后注册自动装配的类。除此之外，两者的注册方法也略有不同，这里不再展开论述，后续可以在Bean注册相关章节展开。</p>
+<h2 id="基于自动装配的扩展"><a href="#基于自动装配的扩展" class="headerlink" title="基于自动装配的扩展"></a>基于自动装配的扩展</h2><p>了解了Spring Boot自动装配的机制，我们可以在日常工作中定义自己的扩展插件，主要包括以下几步：</p>
+<ol>
+<li>实现接口或抽象类方法</li>
+<li>可以通过<code>@Configuration</code>配置类定义我们的Bean</li>
+<li>在<code>resources</code>目录下增加<code>META-INF/spring.factories</code>，并声明<code>org.springframework.boot.autoconfigure.EnableAutoConfiguration=自定义配置类全类名</code></li>
+<li>在其他工程中引入，必须包括<code>@SpringBootApplication</code>或者<code>@EnableAutoConfiguration</code>注解</li>
+</ol>
+]]></content>
+      <categories>
+        <category>Java</category>
+      </categories>
+      <tags>
+        <tag>Spring Boot</tag>
+        <tag>SPI</tag>
+      </tags>
+  </entry>
+</search>
